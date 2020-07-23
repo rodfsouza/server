@@ -7307,7 +7307,7 @@ bool Type_handler::
 {
   float nr= (float) item->val_real();
   if (!item->null_value)
-    return protocol->store(nr, item->decimals, &buf->m_string);
+    return protocol->store_float(nr, item->decimals);
   return protocol->store_null();
 }
 
@@ -7317,7 +7317,7 @@ bool Type_handler::
 {
   double nr= item->val_real();
   if (!item->null_value)
-    return protocol->store(nr, item->decimals, &buf->m_string);
+    return protocol->store_double(nr, item->decimals);
   return protocol->store_null();
 }
 

@@ -215,6 +215,9 @@ public:
   virtual bool store_double(double from, uint32 decimals);
   virtual bool store(Field *field);
 
+  bool store_numeric_zerofill_or_temporal_str(const char *from, size_t length,
+                                              const Type_handler *handler);
+
   virtual bool send_out_parameters(List<Item_param> *sp_params);
 #ifdef EMBEDDED_LIBRARY
   void remove_last_row();

@@ -1897,6 +1897,37 @@ bool Field::send_binary(Protocol *protocol)
 }
 
 
+bool Field::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  StringBuffer<MAX_FIELD_WIDTH> tmp(charset());
+  val_str(&tmp);
+  return protocol->Protocol::store(tmp.ptr(), tmp.length(), tmp.charset());
+}
+
+
+bool Field_num::send_text_numeric_zerofill_str(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  StringBuffer<MAX_FIELD_WIDTH> tmp(&my_charset_latin1);
+  val_str(&tmp);
+  return protocol->store_numeric_zerofill_or_temporal_str(tmp.ptr(),
+                                                          tmp.length(),
+                                                          type_handler());
+}
+
+
+bool Field_temporal::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  StringBuffer<MAX_DATE_STRING_REP_LENGTH> tmp(&my_charset_latin1);
+  val_str(&tmp);
+  return protocol->store_numeric_zerofill_or_temporal_str(tmp.ptr(),
+                                                          tmp.length(),
+                                                          type_handler());
+}
+
+
 /**
    Check to see if field size is compatible with destination.
 
@@ -3857,8 +3888,17 @@ String *Field_tiny::val_str(String *val_buffer,
 
 bool Field_tiny::send_binary(Protocol *protocol)
 {
+  DBUG_ASSERT(marked_for_read());
   return protocol->store_tiny((longlong) (int8) ptr[0]);
 }
+
+bool Field_tiny::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_tiny(val_int());
+}
+
 
 int Field_tiny::cmp(const uchar *a_ptr, const uchar *b_ptr) const
 {
@@ -4017,7 +4057,16 @@ String *Field_short::val_str(String *val_buffer,
 
 bool Field_short::send_binary(Protocol *protocol)
 {
+  DBUG_ASSERT(marked_for_read());
   return protocol->store_short(Field_short::val_int());
+}
+
+
+bool Field_short::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_short(val_int());
 }
 
 
@@ -4205,6 +4254,14 @@ bool Field_medium::send_binary(Protocol *protocol)
 }
 
 
+bool Field_medium::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_long(val_int());
+}
+
+
 int Field_medium::cmp(const uchar *a_ptr, const uchar *b_ptr) const
 {
   long a,b;
@@ -4375,6 +4432,14 @@ bool Field_long::send_binary(Protocol *protocol)
   return protocol->store_long(Field_long::val_int());
 }
 
+bool Field_long::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_long(val_int());
+}
+
+
 int Field_long::cmp(const uchar *a_ptr, const uchar *b_ptr) const
 {
   int32 a,b;
@@ -4510,6 +4575,14 @@ bool Field_longlong::send_binary(Protocol *protocol)
 {
   DBUG_ASSERT(marked_for_read());
   return protocol->store_longlong(Field_longlong::val_int(), unsigned_flag);
+}
+
+
+bool Field_longlong::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_longlong(val_int(), is_unsigned());
 }
 
 
@@ -4690,6 +4763,14 @@ bool Field_float::send_binary(Protocol *protocol)
 {
   DBUG_ASSERT(marked_for_read());
   return protocol->store_float((float) Field_float::val_real(), dec);
+}
+
+
+bool Field_float::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_float((float) Field_float::val_real(), dec);
 }
 
 
@@ -4981,7 +5062,16 @@ String *Field_double::val_str(String *val_buffer,
 
 bool Field_double::send_binary(Protocol *protocol)
 {
+  DBUG_ASSERT(marked_for_read());
   return protocol->store_double(Field_double::val_real(), dec);
+}
+
+
+bool Field_double::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return zerofill ? send_text_numeric_zerofill_str(protocol) :
+                    protocol->store_double(Field_double::val_real(), dec);
 }
 
 
@@ -7108,6 +7198,35 @@ void Field_longstr::make_send_field(Send_field *field)
   }
 }
 
+
+/*
+  An optimized version that uses less stack than Field::send_binary().
+*/
+bool Field_longstr::send_binary(Protocol *protocol)
+{
+  String tmp;
+  val_str(&tmp, &tmp);
+  /*
+    Ensure this function is only used with classes that do not allocate
+    memory in val_str()
+  */
+  DBUG_ASSERT(tmp.alloced_length() == 0);
+  return protocol->store(tmp.ptr(), tmp.length(), tmp.charset());
+}
+
+
+/*
+  An optimized version that uses less stack than Field::send_text().
+*/
+bool Field_longstr::send_text(Protocol_text *protocol)
+{
+  String tmp;
+  val_str(&tmp, &tmp);
+  DBUG_ASSERT(tmp.alloced_length() == 0); // See comments in send_binary()
+  return protocol->Protocol::store(tmp.ptr(), tmp.length(), tmp.charset());
+}
+
+
 	/* Copy a string and fill with space */
 
 int Field_string::store(const char *from, size_t length,CHARSET_INFO *cs)
@@ -7694,6 +7813,29 @@ my_decimal *Field_varstring::val_decimal(my_decimal *decimal_value)
                                      get_length(), decimal_value);
   return decimal_value;
 
+}
+
+
+/*
+  An optimized version that uses less stack and less temporary
+  variable initializationthan Field_longstr::send_binary()
+*/
+bool Field_varstring::send_binary(Protocol *protocol)
+{
+  return protocol->store((const char *) get_data(), get_length(),
+                         field_charset());
+}
+
+
+/*
+  An optimized version that uses less stack and less temporary
+  variable initializationthan Field_longstr::send_text()
+*/
+bool Field_varstring::send_text(Protocol_text *protocol)
+{
+  DBUG_ASSERT(marked_for_read());
+  return protocol->Protocol::store((const char *) get_data(), get_length(),
+                                   field_charset());
 }
 
 

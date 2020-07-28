@@ -3812,9 +3812,6 @@ void fsp_flags_try_adjust(fil_space_t* space, ulint flags)
 {
 	ut_ad(!srv_read_only_mode);
 	ut_ad(fil_space_t::is_valid_flags(flags, space->id));
-	if (space->full_crc32() || fil_space_t::full_crc32(flags)) {
-		return;
-	}
 	if (!space->size && (space->purpose != FIL_TYPE_TABLESPACE
 			     || !fil_space_get_size(space->id))) {
 		return;
@@ -3828,10 +3825,19 @@ void fsp_flags_try_adjust(fil_space_t* space, ulint flags)
 		    page_id_t(space->id, 0), space->zip_size(),
 		    RW_X_LATCH, &mtr)) {
 		ulint f = fsp_header_get_flags(b->frame);
-		if (fil_space_t::full_crc32(f)) {
-			goto func_exit;
-		}
+
 		if (fil_space_t::is_flags_equal(f, flags)) {
+
+			/* Compare the page compression flag of
+			existing space flags with the flag of read page.
+			If it doesn't match then assign the new flag
+			for the tablespace */
+			if (fil_space_t::is_compressed(f)
+			    != space->is_compressed()) {
+				space->flags =
+					(space->flags & FSP_FLAGS_MEM_MASK)
+					| f;
+			}
 			goto func_exit;
 		}
 		/* Suppress the message if only the DATA_DIR flag to differs. */

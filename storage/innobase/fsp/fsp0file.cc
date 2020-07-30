@@ -798,15 +798,7 @@ Datafile::restore_from_doublewrite()
 		FSP_HEADER_OFFSET + FSP_SPACE_FLAGS + page);
 
 	if (!fil_space_t::is_valid_flags(flags, m_space_id)) {
-		ulint cflags = fsp_flags_convert_from_101(flags);
-		if (cflags == ULINT_UNDEFINED) {
-			ib::warn()
-				<< "Ignoring a doublewrite copy of page "
-				<< page_id
-				<< " due to invalid flags " << ib::hex(flags);
-			return(true);
-		}
-		flags = cflags;
+		flags = fsp_flags_convert_from_101(flags);
 		/* The flags on the page should be converted later. */
 	}
 

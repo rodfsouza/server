@@ -532,18 +532,14 @@ buf_dblwr_process()
 {
 	ulint		page_no_dblwr	= 0;
 	byte*		read_buf;
-	byte*		unaligned_read_buf;
 	recv_dblwr_t&	recv_dblwr	= recv_sys.dblwr;
 
 	if (!buf_dblwr) {
 		return;
 	}
 
-	unaligned_read_buf = static_cast<byte*>(
-		ut_malloc_nokey(3U << srv_page_size_shift));
-
 	read_buf = static_cast<byte*>(
-		ut_align(unaligned_read_buf, srv_page_size));
+		aligned_malloc(3 * srv_page_size, srv_page_size));
 	byte* const buf = read_buf + srv_page_size;
 
 	for (recv_dblwr_t::list::iterator i = recv_dblwr.pages.begin();
@@ -551,7 +547,22 @@ buf_dblwr_process()
 	     ++i, ++page_no_dblwr) {
 		byte*	page		= *i;
 		ulint	space_id	= page_get_space_id(page);
-		fil_space_t*	space = fil_space_get(space_id);
+
+		/* Ignore the dblwr pages if dblwr page shouldn't
+		be lesser than checkpoint lsn or greater than
+		last scanned lsn. */
+		lsn_t lsn = mach_read_from_8(page + FIL_PAGE_LSN);
+		if (recv_sys.parse_start_lsn > lsn) {
+			continue;
+		}
+
+		if (recv_sys.scanned_lsn < lsn) {
+			ib::warn() << "Doublewrite page have future lsn "
+				   << lsn;
+			continue;
+		}
+
+		fil_space_t*	space = fil_space_acquire_for_io(space_id);
 
 		if (space == NULL) {
 			/* Maybe we have dropped the tablespace
@@ -576,6 +587,8 @@ buf_dblwr_process()
 					<< space->name
 					<< " (" << space->size << " pages)";
 			}
+next_process:
+			space->release_for_io();
 			continue;
 		}
 
@@ -606,40 +619,16 @@ buf_dblwr_process()
 
 		const bool is_all_zero = buf_is_zeroes(
 			span<const byte>(read_buf, physical_size));
-		const bool expect_encrypted = space->crypt_data
-			&& space->crypt_data->type != CRYPT_SCHEME_UNENCRYPTED;
-		bool is_corrupted = false;
 
 		if (is_all_zero) {
 			/* We will check if the copy in the
 			doublewrite buffer is valid. If not, we will
 			ignore this page (there should be redo log
 			records to initialize it). */
+		} else if (recv_dblwr.validate_page(
+				page_id, read_buf, space, buf)) {
+			goto next_process;
 		} else {
-			/* Decompress the page before
-			validating the checksum. */
-			ulint decomp = fil_page_decompress(buf, read_buf,
-							   space->flags);
-			if (!decomp || (zip_size && decomp != srv_page_size)) {
-				goto bad;
-			}
-
-			if (expect_encrypted
-			    && buf_page_get_key_version(read_buf, space->flags)) {
-				is_corrupted = !buf_page_verify_crypt_checksum(
-							read_buf, space->flags);
-			} else {
-				is_corrupted = buf_page_is_corrupted(
-					true, read_buf, space->flags);
-			}
-
-			if (!is_corrupted) {
-				/* The page is good; there is no need
-				to consult the doublewrite buffer. */
-				continue;
-			}
-
-bad:
 			/* We intentionally skip this message for
 			is_all_zero pages. */
 			ib::info()
@@ -647,42 +636,10 @@ bad:
 				<< " from the doublewrite buffer.";
 		}
 
-		ulint decomp = fil_page_decompress(buf, page, space->flags);
-		if (!decomp || (zip_size && decomp != srv_page_size)) {
-			continue;
-		}
+		page = recv_dblwr.find_page(space_id, page_no, space, buf);
 
-		if (expect_encrypted
-		    && buf_page_get_key_version(read_buf, space->flags)) {
-			is_corrupted = !buf_page_verify_crypt_checksum(
-						page, space->flags);
-		} else {
-			is_corrupted = buf_page_is_corrupted(
-					true, page, space->flags);
-		}
-
-		if (is_corrupted) {
-			/* Theoretically we could have another good
-			copy for this page in the doublewrite
-			buffer. If not, we will report a fatal error
-			for a corrupted page somewhere else if that
-			page was truly needed. */
-			continue;
-		}
-
-		if (page_no == 0) {
-			/* Check the FSP_SPACE_FLAGS. */
-			ulint flags = fsp_header_get_flags(page);
-			if (!fil_space_t::is_valid_flags(flags, space_id)
-			    && fsp_flags_convert_from_101(flags)
-			    == ULINT_UNDEFINED) {
-				ib::warn() << "Ignoring a doublewrite copy"
-					" of page " << page_id
-					<< " due to invalid flags "
-					<< ib::hex(flags);
-				continue;
-			}
-			/* The flags on the page should be converted later. */
+		if (!page) {
+			goto next_process;
 		}
 
 		/* Write the good page from the doublewrite buffer to
@@ -691,17 +648,18 @@ bad:
 		IORequest	write_request(IORequest::WRITE);
 
 		fil_io(write_request, true, page_id, zip_size,
-		       0, physical_size,
-				const_cast<byte*>(page), NULL);
+		       0, physical_size, page, NULL);
 
 		ib::info() << "Recovered page " << page_id
 			<< " from the doublewrite buffer.";
+
+		goto next_process;
 	}
 
 	recv_dblwr.pages.clear();
 
 	fil_flush_file_spaces(FIL_TYPE_TABLESPACE);
-	ut_free(unaligned_read_buf);
+	aligned_free(read_buf);
 }
 
 /****************************************************************//**

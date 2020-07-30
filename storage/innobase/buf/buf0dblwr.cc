@@ -549,7 +549,7 @@ buf_dblwr_process()
 	for (recv_dblwr_t::list::iterator i = recv_dblwr.pages.begin();
 	     i != recv_dblwr.pages.end();
 	     ++i, ++page_no_dblwr) {
-		byte*	page = *i;
+		byte* page = *i;
 		const ulint page_no = page_get_page_no(page);
 
 		if (!page_no) {
@@ -570,7 +570,7 @@ buf_dblwr_process()
 		const page_id_t page_id(space_id, page_no);
 
 		if (recv_sys->scanned_lsn < lsn) {
-			ib::warn() << "Ignoring doublewrite copy of "
+			ib::warn() << "Ignoring a doublewrite copy of page "
 				   << page_id
 				   << " with future log sequence number "
 				   << lsn;
@@ -579,7 +579,7 @@ buf_dblwr_process()
 
 		fil_space_t* space = fil_space_acquire_for_io(space_id);
 
-		if (space == NULL) {
+		if (!space) {
 			/* Maybe we have dropped the tablespace
 			and this page once belonged to it: do nothing */
 			continue;

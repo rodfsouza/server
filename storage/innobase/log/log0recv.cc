@@ -4098,8 +4098,7 @@ bool recv_dblwr_t::validate_page(const page_id_t page_id,
     if (!fsp_flags_is_valid(flags, page_id.space()) &&
         fsp_flags_convert_from_101(flags) == ULINT_UNDEFINED)
     {
-      ib::warn() << "Ignoring a doublewrite copy of page "
-                 << page_id
+      ib::warn() << "Ignoring a doublewrite copy of page " << page_id
                  << "due to invalid flags " << ib::hex(flags);
       return false;
     }
@@ -4109,7 +4108,6 @@ bool recv_dblwr_t::validate_page(const page_id_t page_id,
   }
 
   ut_ad(tmp_buf);
-  ut_ad(space);
   byte *tmp_frame= tmp_buf;
   byte *tmp_page= tmp_buf + srv_page_size;
   const uint16_t page_type= mach_read_from_2(page + FIL_PAGE_TYPE);
@@ -4136,9 +4134,14 @@ bool recv_dblwr_t::validate_page(const page_id_t page_id,
     memcpy(tmp_page, page, page_size.physical());
     /* fall through */
   case FIL_PAGE_PAGE_COMPRESSED_ENCRYPTED:
-    return !page_size.is_compressed() &&
-      fil_page_decompress(tmp_frame, tmp_page) == srv_page_size &&
-      !buf_page_is_corrupted(true, tmp_page, page_size, space);
+    if (page_size.is_compressed())
+      return false; /* ROW_FORMAT=COMPRESSED cannot be page_compressed */
+    ulint decomp= fil_page_decompress(tmp_frame, tmp_page);
+    if (!decomp)
+      return false; /* decompression failed */
+    if (decomp == srv_page_size)
+      return false; /* the page was not compressed (invalid page type) */
+    return !buf_page_is_corrupted(true, tmp_page, page_size, space);
   }
 
   return !buf_page_is_corrupted(true, page, page_size, space);

@@ -178,10 +178,8 @@ struct recv_dblwr_t {
 	@param[in,out]	tmp_buf		temporary buffer to decrypt and
 					decompress the page
 	@return true if success */
-	bool validate_page(const page_id_t page_id,
-                           const byte *page,
-                           const fil_space_t *space,
-                           byte *tmp_buf);
+	bool validate_page(const page_id_t page_id, const byte *page,
+			   const fil_space_t *space, byte *tmp_buf);
 
 	/** Find a doublewrite copy of a page.
 	@param[in]	space_id	tablespace identifier
@@ -193,8 +191,8 @@ struct recv_dblwr_t {
 	@return	page frame
 	@retval NULL if no page was found */
 	byte* find_page(ulint space_id, ulint page_no,
-                        const fil_space_t *space=nullptr,
-                        byte *tmp_buf=nullptr);
+			const fil_space_t *space=nullptr,
+			byte *tmp_buf=nullptr);
 
 	typedef std::deque<byte*, ut_allocator<byte*> > list;
 

@@ -530,6 +530,7 @@ buf_dblwr_init_or_load_pages(
 void
 buf_dblwr_process()
 {
+	ut_ad(recv_sys.parse_start_lsn);
 	ulint		page_no_dblwr	= 0;
 	byte*		read_buf;
 	recv_dblwr_t&	recv_dblwr	= recv_sys.dblwr;
@@ -548,11 +549,16 @@ buf_dblwr_process()
 		byte*	page		= *i;
 		ulint	space_id	= page_get_space_id(page);
 
-		/* Ignore the dblwr pages if dblwr page shouldn't
-		be lesser than checkpoint lsn or greater than
-		last scanned lsn. */
+		if (!page_get_page_no(page)) {
+			/* page 0 should have been recovered
+			already via Datafile::restore_from_doublewrite() */
+			continue;
+		}
+
 		lsn_t lsn = mach_read_from_8(page + FIL_PAGE_LSN);
 		if (recv_sys.parse_start_lsn > lsn) {
+			/* Pages written before the checkpoint are
+			not useful for recovery. */
 			continue;
 		}
 
@@ -587,7 +593,7 @@ buf_dblwr_process()
 					<< space->name
 					<< " (" << space->size << " pages)";
 			}
-next_process:
+next_page:
 			space->release_for_io();
 			continue;
 		}
@@ -627,7 +633,7 @@ next_process:
 			records to initialize it). */
 		} else if (recv_dblwr.validate_page(
 				page_id, read_buf, space, buf)) {
-			goto next_process;
+			goto next_page;
 		} else {
 			/* We intentionally skip this message for
 			is_all_zero pages. */
@@ -639,7 +645,7 @@ next_process:
 		page = recv_dblwr.find_page(space_id, page_no, space, buf);
 
 		if (!page) {
-			goto next_process;
+			goto next_page;
 		}
 
 		/* Write the good page from the doublewrite buffer to
@@ -653,7 +659,7 @@ next_process:
 		ib::info() << "Recovered page " << page_id
 			<< " from the doublewrite buffer.";
 
-		goto next_process;
+		goto next_page;
 	}
 
 	recv_dblwr.pages.clear();

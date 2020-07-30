@@ -799,7 +799,6 @@ Datafile::restore_from_doublewrite()
 
 	if (!fil_space_t::is_valid_flags(flags, m_space_id)) {
 		flags = fsp_flags_convert_from_101(flags);
-		/* The flags on the page should be converted later. */
 	}
 
 	ulint physical_size = fil_space_t::physical_size(flags);

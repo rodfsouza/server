@@ -3757,10 +3757,8 @@ recv_recovery_from_checkpoint_start(lsn_t flush_lsn)
 			rescan = true;
 		}
 
+		recv_sys.parse_start_lsn = checkpoint_lsn;
 		if (srv_operation == SRV_OPERATION_NORMAL) {
-			/* Assign the checkpoint lsn in parse_start_lsn
-			to avoid the recovery of oldest dblwr pages */
-			recv_sys.parse_start_lsn = checkpoint_lsn;
 			buf_dblwr_process();
 		}
 
@@ -3951,7 +3949,6 @@ bool recv_dblwr_t::validate_page(const page_id_t page_id,
   }
 
   ut_ad(tmp_buf);
-  ut_ad(space);
   byte *tmp_frame= tmp_buf;
   byte *tmp_page= tmp_buf + srv_page_size;
   const uint16_t page_type= mach_read_from_2(page + FIL_PAGE_TYPE);
@@ -3968,7 +3965,7 @@ bool recv_dblwr_t::validate_page(const page_id_t page_id,
       return false;
     if (page_type != FIL_PAGE_PAGE_COMPRESSED_ENCRYPTED)
       return true;
-    if (space->is_compressed())
+    if (space->zip_size())
       return false;
     memcpy(tmp_page, page, space->physical_size());
     if (!fil_space_decrypt(space, tmp_frame, tmp_page))
@@ -3981,9 +3978,10 @@ bool recv_dblwr_t::validate_page(const page_id_t page_id,
     memcpy(tmp_page, page, space->physical_size());
     /* fall through */
   case FIL_PAGE_PAGE_COMPRESSED_ENCRYPTED:
-    return !space->is_compressed() &&
-      fil_page_decompress(tmp_frame, tmp_page, space->flags) == srv_page_size &&
-      !buf_page_is_corrupted(true, tmp_page, space->flags);
+    ulint decomp= fil_page_decompress(tmp_frame, tmp_page, space->flags);
+    if (!decomp || decomp == srv_page_size || space->zip_size())
+      return false;
+    return !buf_page_is_corrupted(true, tmp_page, space->flags);
   }
 
   return !buf_page_is_corrupted(true, page, space->flags);

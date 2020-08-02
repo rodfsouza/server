@@ -42,12 +42,14 @@ extern char *__bss_start;
 #define PTR_SANE(p) (p)
 #endif /* __linux */
 
-#ifdef __linux__
-
 void my_init_stacktrace()
 {
+#ifdef __linux__
   heap_start = (char*) &__bss_start;
+#endif /* __linux__ */
 }
+
+#ifdef __linux__
 
 static void print_buffer(char *buffer, size_t count)
 {

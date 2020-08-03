@@ -870,11 +870,38 @@ bool innobase_allocate_row_for_vcol(
 				    dict_index_t* index,
 				    mem_heap_t**  heap,
 				    TABLE**	  table,
-				    byte**	  record,
-				    VCOL_STORAGE** storage);
+				    VCOL_STORAGE* storage);
 
 /** Free memory allocated by innobase_allocate_row_for_vcol() */
 void innobase_free_row_for_vcol(VCOL_STORAGE *storage);
+
+class ib_vcol_row
+{
+	VCOL_STORAGE storage;
+	bool set_up;
+public:
+	mem_heap_t*  heap;
+	ib_vcol_row(mem_heap_t *heap): set_up(false), heap(heap) {}
+	byte *record(THD *thd, dict_index_t* index, TABLE **table)
+	{
+		if (!set_up)
+		{
+			bool fail = innobase_allocate_row_for_vcol(thd, index,
+				&heap, table, &storage);
+			if (fail)
+				return NULL;
+		}
+		set_up = true;
+		return storage.innobase_record;
+	};
+	~ib_vcol_row() {
+		if (heap) {
+			if (set_up)
+				innobase_free_row_for_vcol(&storage);
+			mem_heap_free(heap);
+		}
+	}
+};
 
 /** Get the computed value by supplying the base column values.
 @param[in,out]	row		the data row

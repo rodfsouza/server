@@ -895,10 +895,7 @@ row_ins_foreign_fill_virtual(
 	const rec_offs*	offsets =
 		rec_get_offsets(rec, index, offsets_, true,
 				ULINT_UNDEFINED, &cascade->heap);
-	mem_heap_t*	v_heap = NULL;
 	TABLE*		mysql_table= NULL;
-	VCOL_STORAGE*	vcol_storage= NULL;
-	byte*		record;
 	upd_t*		update = cascade->update;
 	ulint		n_v_fld = index->table->n_v_def;
 	ulint		n_diff;
@@ -918,12 +915,11 @@ row_ins_foreign_fill_virtual(
 		innobase_init_vc_templ(index->table);
 	}
 
-	if (innobase_allocate_row_for_vcol(thd, index, &v_heap,
-                                           &mysql_table,
-                                           &record, &vcol_storage)) {
-		if (v_heap) mem_heap_free(v_heap);
+	ib_vcol_row vc(NULL);
+	uchar *record = vc.record(thd, index, &mysql_table);
+	if (!record) {
 		*err = DB_OUT_OF_MEMORY;
-		goto func_exit;
+		return;
 	}
 
 	for (uint16_t i = 0; i < n_v_fld; i++) {
@@ -939,12 +935,12 @@ row_ins_foreign_fill_virtual(
 
 		dfield_t*	vfield = innobase_get_computed_value(
 				update->old_vrow, col, index,
-				&v_heap, update->heap, NULL, thd, mysql_table,
+				&vc.heap, update->heap, NULL, thd, mysql_table,
                                 record, NULL, NULL, NULL);
 
 		if (vfield == NULL) {
 			*err = DB_COMPUTE_VALUE_FAILED;
-			goto func_exit;
+			return;
 		}
 
 		upd_field = upd_get_nth_field(update, n_diff);
@@ -969,13 +965,13 @@ row_ins_foreign_fill_virtual(
 
 			dfield_t* new_vfield = innobase_get_computed_value(
 					update->old_vrow, col, index,
-					&v_heap, update->heap, NULL, thd,
+					&vc.heap, update->heap, NULL, thd,
 					mysql_table, record, NULL,
 					node->update, foreign);
 
 			if (new_vfield == NULL) {
 				*err = DB_COMPUTE_VALUE_FAILED;
-				goto func_exit;
+				return;
 			}
 
 			dfield_copy(&(upd_field->new_val), new_vfield);
@@ -986,13 +982,6 @@ row_ins_foreign_fill_virtual(
 
 	update->n_fields = n_diff;
 	*err = DB_SUCCESS;
-
-func_exit:
-	if (v_heap) {
-		if (vcol_storage)
-			innobase_free_row_for_vcol(vcol_storage);
-		mem_heap_free(v_heap);
-	}
 }
 
 #ifdef WITH_WSREP

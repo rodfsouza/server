@@ -20949,8 +20949,7 @@ bool innobase_allocate_row_for_vcol(
 				    dict_index_t* index,
 				    mem_heap_t**  heap,
 				    TABLE**	  table,
-				    byte**	  record,
-				    VCOL_STORAGE** storage)
+				    VCOL_STORAGE* storage)
 {
 	TABLE *maria_table;
 	String *blob_value_storage;
@@ -20964,29 +20963,25 @@ bool innobase_allocate_row_for_vcol(
 	maria_table= *table;
 	if (!*heap && !(*heap= mem_heap_create(srv_page_size)))
 	{
-		*storage= 0;
-		return TRUE;
+		return true;
 	}
-	*record= static_cast<byte*>(mem_heap_alloc(*heap,
+	uchar *record= static_cast<byte*>(mem_heap_alloc(*heap,
                                                    maria_table->s->reclength));
-	*storage= static_cast<VCOL_STORAGE*>
-          (mem_heap_alloc(*heap, sizeof(**storage)));
 	blob_value_storage= static_cast<String*>
           (mem_heap_alloc(*heap,
                           maria_table->s->virtual_not_stored_blob_fields *
                           sizeof(String)));
-	if (!*record || !*storage || !blob_value_storage)
+	if (!record || !blob_value_storage)
 	{
-		*storage= 0;
-		return TRUE;
+		return true;
 	}
-	(*storage)->maria_table= maria_table;
-	(*storage)->innobase_record= *record;
-	(*storage)->maria_record= maria_table->field[0]->record_ptr();
-	(*storage)->blob_value_storage= blob_value_storage;
+	storage->maria_table= maria_table;
+	storage->innobase_record= record;
+	storage->maria_record= maria_table->field[0]->record_ptr();
+	storage->blob_value_storage= blob_value_storage;
 
-	maria_table->move_fields(maria_table->field, *record,
-				 (*storage)->maria_record);
+	maria_table->move_fields(maria_table->field, record,
+				 storage->maria_record);
 	maria_table->remember_blob_values(blob_value_storage);
 
 	return FALSE;

@@ -188,7 +188,7 @@ redo:
                            (const uchar *)STRING_WITH_LEN("DEFAULT"), 0))
     return tmp_table ?  ha_default_tmp_plugin(thd) : ha_default_plugin(thd);
 
-  if ((plugin= my_plugin_lock_by_name(thd, name, MYSQL_STORAGE_ENGINE_PLUGIN)))
+  if ((plugin= my_plugin_lock_by_name(thd, thd, name, MYSQL_STORAGE_ENGINE_PLUGIN)))
   {
     handlerton *hton= plugin_hton(plugin);
     if (hton && !(hton->flags & HTON_NOT_USER_SELECTABLE))
@@ -748,9 +748,10 @@ static my_bool dropdb_handlerton(THD *unused1, plugin_ref plugin,
 }
 
 
-void ha_drop_database(char* path)
+void ha_drop_database(THD *ctl_thd, char* path)
 {
-  plugin_foreach(NULL, dropdb_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, path);
+  plugin_foreach(ctl_thd, NULL, dropdb_handlerton,
+                 MYSQL_STORAGE_ENGINE_PLUGIN, path);
 }
 
 
@@ -764,9 +765,10 @@ static my_bool checkpoint_state_handlerton(THD *unused1, plugin_ref plugin,
 }
 
 
-void ha_checkpoint_state(bool disable)
+void ha_checkpoint_state(THD *ctl_thd, bool disable)
 {
-  plugin_foreach(NULL, checkpoint_state_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, &disable);
+  plugin_foreach(ctl_thd, NULL, checkpoint_state_handlerton,
+                 MYSQL_STORAGE_ENGINE_PLUGIN, &disable);
 }
 
 
@@ -797,12 +799,12 @@ static my_bool commit_checkpoint_request_handlerton(THD *unused1, plugin_ref plu
   If pre_hook is non-NULL, the hook will be called prior to each invocation.
 */
 void
-ha_commit_checkpoint_request(void *cookie, void (*pre_hook)(void *))
+ha_commit_checkpoint_request(THD *ctl_thd, void *cookie, void (*pre_hook)(void *))
 {
   st_commit_checkpoint_request st;
   st.cookie= cookie;
   st.pre_hook= pre_hook;
-  plugin_foreach(NULL, commit_checkpoint_request_handlerton,
+  plugin_foreach(ctl_thd, NULL, commit_checkpoint_request_handlerton,
                  MYSQL_STORAGE_ENGINE_PLUGIN, &st);
 }
 
@@ -832,7 +834,7 @@ static my_bool closecon_handlerton(THD *thd, plugin_ref plugin,
 */
 void ha_close_connection(THD* thd)
 {
-  plugin_foreach_with_mask(thd, closecon_handlerton,
+  plugin_foreach_with_mask(thd, thd, closecon_handlerton,
                            MYSQL_STORAGE_ENGINE_PLUGIN,
                            PLUGIN_IS_DELETED|PLUGIN_IS_READY, 0);
 }
@@ -851,7 +853,7 @@ static my_bool kill_handlerton(THD *thd, plugin_ref plugin,
 void ha_kill_query(THD* thd, enum thd_kill_levels level)
 {
   DBUG_ENTER("ha_kill_query");
-  plugin_foreach(thd, kill_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, &level);
+  plugin_foreach(thd, thd, kill_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, &level);
   DBUG_VOID_RETURN;
 }
 
@@ -871,7 +873,7 @@ static my_bool plugin_prepare_for_backup(THD *unused1, plugin_ref plugin,
 
 void ha_prepare_for_backup()
 {
-  plugin_foreach_with_mask(0, plugin_prepare_for_backup,
+  plugin_foreach_with_mask(0, 0, plugin_prepare_for_backup,
                            MYSQL_STORAGE_ENGINE_PLUGIN,
                            PLUGIN_IS_DELETED|PLUGIN_IS_READY, 0);
 }
@@ -887,7 +889,7 @@ static my_bool plugin_end_backup(THD *unused1, plugin_ref plugin,
 
 void ha_end_backup()
 {
-  plugin_foreach_with_mask(0, plugin_end_backup,
+  plugin_foreach_with_mask(0,  0,plugin_end_backup,
                            MYSQL_STORAGE_ENGINE_PLUGIN,
                            PLUGIN_IS_DELETED|PLUGIN_IS_READY, 0);
 }
@@ -1981,13 +1983,13 @@ static my_bool xarollback_handlerton(THD *unused1, plugin_ref plugin,
 }
 
 
-int ha_commit_or_rollback_by_xid(XID *xid, bool commit)
+int ha_commit_or_rollback_by_xid(THD *ctl_thd, XID *xid, bool commit)
 {
   struct xahton_st xaop;
   xaop.xid= xid;
   xaop.result= 1;
 
-  plugin_foreach(NULL, commit ? xacommit_handlerton : xarollback_handlerton,
+  plugin_foreach(ctl_thd, NULL, commit ? xacommit_handlerton : xarollback_handlerton,
                  MYSQL_STORAGE_ENGINE_PLUGIN, &xaop);
 
   return xaop.result;
@@ -2199,7 +2201,7 @@ static my_bool xarecover_handlerton(THD *unused, plugin_ref plugin,
   return FALSE;
 }
 
-int ha_recover(HASH *commit_list)
+int ha_recover(THD *ctl_thd, HASH *commit_list)
 {
   struct xarecover_st info;
   DBUG_ENTER("ha_recover");
@@ -2233,8 +2235,10 @@ int ha_recover(HASH *commit_list)
     DBUG_RETURN(1);
   }
 
-  plugin_foreach(NULL, xarecover_handlerton, 
+  mysql_mutex_lock(&LOCK_plugin);
+  plugin_foreach(ctl_thd, NULL, xarecover_handlerton, 
                  MYSQL_STORAGE_ENGINE_PLUGIN, &info);
+  mysql_mutex_unlock(&LOCK_plugin);
 
   my_free(info.list);
   if (info.found_foreign_xids)
@@ -2471,7 +2475,7 @@ int ha_start_consistent_snapshot(THD *thd)
     have a consistent binlog position.
   */
   mysql_mutex_lock(&LOCK_commit_ordered);
-  err= plugin_foreach(thd, snapshot_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, &warn);
+  err= plugin_foreach(thd, thd, snapshot_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, &warn);
   mysql_mutex_unlock(&LOCK_commit_ordered);
 
   if (err)
@@ -2507,7 +2511,7 @@ bool ha_flush_logs(handlerton *db_type)
 {
   if (db_type == NULL)
   {
-    if (plugin_foreach(NULL, flush_handlerton,
+    if (plugin_foreach(NULL, NULL, flush_handlerton,
                           MYSQL_STORAGE_ENGINE_PLUGIN, 0))
       return TRUE;
   }
@@ -5414,7 +5418,7 @@ int ha_discover_table(THD *thd, TABLE_SHARE *share)
   else if (share->db_plugin)
     found= discover_handlerton(thd, share->db_plugin, share);
   else
-    found= plugin_foreach(thd, discover_handlerton,
+    found= plugin_foreach(thd, thd, discover_handlerton,
                         MYSQL_STORAGE_ENGINE_PLUGIN, share);
   
   if (!found)
@@ -5565,7 +5569,7 @@ bool ha_table_exists(THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table_n
       
       if (type != TABLE_TYPE_VIEW)
       {
-        plugin_ref p=  plugin_lock_by_name(thd, &engine,
+        plugin_ref p=  plugin_lock_by_name(thd, thd, &engine,
                                            MYSQL_STORAGE_ENGINE_PLUGIN);
         *hton= p ? plugin_hton(p) : NULL;
         if (*hton)
@@ -5579,7 +5583,7 @@ bool ha_table_exists(THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table_n
   }
 
   args.frm_exists= false;
-  if (plugin_foreach(thd, discover_existence, MYSQL_STORAGE_ENGINE_PLUGIN,
+  if (plugin_foreach(thd, thd, discover_existence, MYSQL_STORAGE_ENGINE_PLUGIN,
                      &args))
   {
     if (hton)
@@ -5776,7 +5780,7 @@ int ha_discover_table_names(THD *thd, LEX_CSTRING *db, MY_DIR *dirp,
   {
     st_discover_names_args args= {db, NULL, result, 0};
     error= ext_table_discovery_simple(dirp, result) ||
-           plugin_foreach(thd, discover_names,
+           plugin_foreach(thd, thd, discover_names,
                             MYSQL_STORAGE_ENGINE_PLUGIN, &args);
   }
   else
@@ -5788,7 +5792,7 @@ int ha_discover_table_names(THD *thd, LEX_CSTRING *db, MY_DIR *dirp,
              sizeof(FILEINFO), cmp_file_names);
 
     error= extension_based_table_discovery(dirp, reg_ext, result) ||
-           plugin_foreach(thd, discover_names,
+           plugin_foreach(thd, thd, discover_names,
                             MYSQL_STORAGE_ENGINE_PLUGIN, &args);
     if (args.possible_duplicates > 0)
       result->remove_duplicates();
@@ -6099,7 +6103,7 @@ static my_bool exts_handlerton(THD *unused, plugin_ref plugin,
   return FALSE;
 }
 
-TYPELIB *ha_known_exts(void)
+TYPELIB *ha_known_exts(THD *ctl_thd)
 {
   if (!known_extensions.type_names || mysys_usage_id != known_extensions_id)
   {
@@ -6110,7 +6114,7 @@ TYPELIB *ha_known_exts(void)
     found_exts.push_back((char*) TRG_EXT);
     found_exts.push_back((char*) TRN_EXT);
 
-    plugin_foreach(NULL, exts_handlerton,
+    plugin_foreach(ctl_thd, NULL, exts_handlerton,
                    MYSQL_STORAGE_ENGINE_PLUGIN, &found_exts);
 
     ext= (const char **) my_once_alloc(sizeof(char *)*
@@ -6177,7 +6181,7 @@ bool ha_show_status(THD *thd, handlerton *db_type, enum ha_stat_type stat)
 
   if (db_type == NULL)
   {
-    result= plugin_foreach(thd, showstat_handlerton,
+    result= plugin_foreach(thd, thd, showstat_handlerton,
                            MYSQL_STORAGE_ENGINE_PLUGIN, &stat);
   }
   else

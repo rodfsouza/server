@@ -537,7 +537,7 @@ bool trans_xa_commit(THD *thd)
     if (auto xs= xid_cache_search(thd, thd->lex->xid))
     {
       res= xa_trans_rolled_back(xs);
-      ha_commit_or_rollback_by_xid(thd->lex->xid, !res);
+      ha_commit_or_rollback_by_xid(thd, thd->lex->xid, !res);
       xid_cache_delete(thd, xs);
     }
     else
@@ -631,7 +631,7 @@ bool trans_xa_rollback(THD *thd)
     if (auto xs= xid_cache_search(thd, thd->lex->xid))
     {
       xa_trans_rolled_back(xs);
-      ha_commit_or_rollback_by_xid(thd->lex->xid, 0);
+      ha_commit_or_rollback_by_xid(thd, thd->lex->xid, 0);
       xid_cache_delete(thd, xs);
     }
     else

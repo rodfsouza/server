@@ -3246,6 +3246,8 @@ public:
   int audit_plugin_version;
 #endif
 
+  st_plugins_state *plugins_state;
+
 #if defined(ENABLED_DEBUG_SYNC)
   /* Debug Sync facility. See debug_sync.cc. */
   struct st_debug_sync_control *debug_sync_control;

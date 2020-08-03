@@ -33,6 +33,7 @@
 #include "my_alloc.h"                       /* MEM_ROOT */
 
 class sys_var;
+struct LEX;
 enum SHOW_COMP_OPTION { SHOW_OPTION_YES, SHOW_OPTION_NO, SHOW_OPTION_DISABLED};
 enum enum_plugin_load_option { PLUGIN_OFF, PLUGIN_ON, PLUGIN_FORCE,
   PLUGIN_FORCE_PLUS_PERMANENT };
@@ -113,8 +114,8 @@ struct st_plugin_int
   st_ptr_backup *ptr_backup;
   uint nbackups;
   uint state;
-  uint ref_count;               /* number of threads using the plugin */
-  uint locks_total;             /* how many times the plugin was locked */
+  int32 volatile ref_count;     /* number of threads using the plugin */
+  int32 volatile locks_total;   /* how many times the plugin was locked */
   void *data;                   /* plugin type specific, e.g. handlerton */
   MEM_ROOT mem_root;            /* memory for dynamic plugin structures */
   sys_var *system_vars;         /* server variables for this plugin */
@@ -123,6 +124,8 @@ struct st_plugin_int
 
 
 extern mysql_mutex_t LOCK_plugin;
+struct st_plugins_state;
+extern st_plugins_state *global_plugins_state;
 
 /*
   See intern_plugin_lock() for the explanation for the
@@ -165,12 +168,13 @@ extern const char *plugin_maturity_names[];
 extern int plugin_init(int *argc, char **argv, int init_flags);
 extern void plugin_shutdown(void);
 void add_plugin_options(DYNAMIC_ARRAY *options, MEM_ROOT *mem_root);
-extern bool plugin_is_ready(const LEX_CSTRING *name, int type);
-#define my_plugin_lock_by_name(A,B,C) plugin_lock_by_name(A,B,C)
+extern bool plugin_is_ready(THD *ctl_thd, const LEX_CSTRING *name, int type);
+
+#define my_plugin_lock_by_name(A,B,C,D) plugin_lock_by_name(A,B,C,D)
 #define my_plugin_lock(A,B) plugin_lock(A,B)
 extern plugin_ref plugin_lock(THD *thd, plugin_ref ptr);
-extern plugin_ref plugin_lock_by_name(THD *thd, const LEX_CSTRING *name,
-                                      int type);
+extern plugin_ref plugin_lock_by_name(THD *ctl_thd, THD *thd,
+                                      const LEX_CSTRING *name, int type);
 extern void plugin_unlock(THD *thd, plugin_ref plugin);
 extern void plugin_unlock_list(THD *thd, plugin_ref *list, uint count);
 extern bool mysql_install_plugin(THD *thd, const LEX_CSTRING *name,
@@ -182,15 +186,15 @@ extern void plugin_thdvar_init(THD *thd);
 extern void plugin_thdvar_cleanup(THD *thd);
 sys_var *find_plugin_sysvar(st_plugin_int *plugin, st_mysql_sys_var *var);
 void plugin_opt_set_limits(struct my_option *, const struct st_mysql_sys_var *);
-extern SHOW_COMP_OPTION plugin_status(const char *name, size_t len, int type);
 extern bool check_valid_path(const char *path, size_t length);
 extern void plugin_mutex_init();
 
 typedef my_bool (plugin_foreach_func)(THD *thd,
                                       plugin_ref plugin,
                                       void *arg);
-#define plugin_foreach(A,B,C,D) plugin_foreach_with_mask(A,B,C,PLUGIN_IS_READY,D)
-extern bool plugin_foreach_with_mask(THD *thd, plugin_foreach_func *func,
+#define plugin_foreach(A,B,C,D,E) plugin_foreach_with_mask(A,B,C,D,PLUGIN_IS_READY,E)
+extern bool plugin_foreach_with_mask(THD *ctl_thd, THD *thd,
+                                     plugin_foreach_func *func,
                                      int type, uint state_mask, void *arg);
 extern void sync_dynamic_session_variables(THD* thd, bool global_lock);
 

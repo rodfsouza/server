@@ -123,7 +123,7 @@ static my_bool set_SE_checkpoint(THD* unused, plugin_ref plugin, void* arg)
 
 bool wsrep_set_SE_checkpoint(XID& xid)
 {
-  return plugin_foreach(NULL, set_SE_checkpoint, MYSQL_STORAGE_ENGINE_PLUGIN,
+  return plugin_foreach(NULL, NULL, set_SE_checkpoint, MYSQL_STORAGE_ENGINE_PLUGIN,
                         &xid);
 }
 
@@ -154,7 +154,7 @@ static my_bool get_SE_checkpoint(THD* unused, plugin_ref plugin, void* arg)
 
 bool wsrep_get_SE_checkpoint(XID& xid)
 {
-  return plugin_foreach(NULL, get_SE_checkpoint, MYSQL_STORAGE_ENGINE_PLUGIN,
+  return plugin_foreach(NULL, NULL, get_SE_checkpoint, MYSQL_STORAGE_ENGINE_PLUGIN,
                         &xid);
 }
 

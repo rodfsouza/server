@@ -6698,7 +6698,7 @@ MYSQL_BIN_LOG::do_checkpoint_request(ulong binlog_id)
   } while (entry->binlog_id != binlog_id);
   mysql_mutex_unlock(&LOCK_xid_list);
 
-  ha_commit_checkpoint_request(entry, binlog_checkpoint_callback);
+  ha_commit_checkpoint_request(current_thd, entry, binlog_checkpoint_callback);
   /*
     When we rotated the binlog, we incremented xid_count to make sure the
     entry would not go away until this point, where we have done all necessary
@@ -9496,7 +9496,7 @@ int TC_LOG_MMAP::unlog(ulong cookie, my_xid xid)
       commit_checkpoint_request.
     */
     ++full_buffer->pending_count;
-    ha_commit_checkpoint_request(full_buffer, mmap_do_checkpoint_callback);
+    ha_commit_checkpoint_request(current_thd, full_buffer, mmap_do_checkpoint_callback);
     commit_checkpoint_notify(full_buffer);
   }
   return 0;
@@ -9622,7 +9622,7 @@ int TC_LOG_MMAP::recover()
         goto err2; // OOM
   }
 
-  if (ha_recover(&xids))
+  if (ha_recover(current_thd, &xids))
     goto err2;
 
   my_hash_free(&xids);
@@ -9663,7 +9663,7 @@ int TC_LOG::using_heuristic_recover()
     return 0;
 
   sql_print_information("Heuristic crash recovery mode");
-  if (ha_recover(0))
+  if (ha_recover(current_thd, 0))
     sql_print_error("Heuristic crash recovery failed");
   sql_print_information("Please restart mysqld without --tc-heuristic-recover");
   return 1;
@@ -10303,7 +10303,7 @@ int TC_LOG_BINLOG::recover(LOG_INFO *linfo, const char *last_log_name,
 
   if (do_xa)
   {
-    if (ha_recover(&xids))
+    if (ha_recover(current_thd, &xids))
       goto err2;
 
     free_root(&mem_root, MYF(0));

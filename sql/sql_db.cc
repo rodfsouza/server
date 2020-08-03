@@ -919,7 +919,7 @@ mysql_rm_db_internal(THD *thd, const LEX_CSTRING *db, bool if_exists, bool silen
       made, these drops should still not be logged.
     */
 
-    ha_drop_database(path);
+    ha_drop_database(thd, path);
     tmp_disable_binlog(thd);
     query_cache_invalidate1(thd, dbnorm);
     if (!rm_mysql_schema)

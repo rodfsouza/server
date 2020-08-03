@@ -117,7 +117,7 @@ void mysql_audit_acquire_plugins(THD *thd, ulong *event_class_mask)
 
   if (check_audit_mask(thd->audit_class_mask, event_class_mask))
   {
-    plugin_foreach(thd, acquire_plugins, MYSQL_AUDIT_PLUGIN, event_class_mask);
+    plugin_foreach(thd, thd, acquire_plugins, MYSQL_AUDIT_PLUGIN, event_class_mask);
     add_audit_mask(thd->audit_class_mask, event_class_mask);
     thd->audit_plugin_version= global_plugin_version;
   }
@@ -351,6 +351,7 @@ static my_bool calc_class_mask(THD *thd, plugin_ref plugin, void *arg)
 int finalize_audit_plugin(st_plugin_int *plugin)
 {
   unsigned long event_class_mask[MYSQL_AUDIT_CLASS_MASK_SIZE];
+  THD *thd= current_thd;
   
   if (plugin->plugin->deinit && plugin->plugin->deinit(NULL))
   {
@@ -369,7 +370,7 @@ int finalize_audit_plugin(st_plugin_int *plugin)
     lock on mysql.plugin.
   */
   mysql_mutex_lock(&LOCK_audit_mask);
-  plugin_foreach(current_thd, calc_class_mask, MYSQL_AUDIT_PLUGIN,
+  plugin_foreach(thd, thd, calc_class_mask, MYSQL_AUDIT_PLUGIN,
                  &event_class_mask);
 
   /* Set the global audit mask */
@@ -424,7 +425,8 @@ void mysql_audit_notify(THD *thd, uint event_class, const void *event)
   */
   if (unlikely(!thd))
   {
-    plugin_foreach(thd, plugins_dispatch, MYSQL_AUDIT_PLUGIN, &event_generic);
+    plugin_foreach(thd, thd, plugins_dispatch,
+                   MYSQL_AUDIT_PLUGIN, &event_generic);
   }
   else
   {

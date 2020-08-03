@@ -208,7 +208,7 @@ static my_bool show_plugins(THD *thd, plugin_ref plugin, void *arg)
 */
 int fill_plugin_version(THD *thd, TABLE_LIST *tables)
 {
-  return plugin_foreach_with_mask(thd, show_plugins, MYSQL_ANY_PLUGIN,
+  return plugin_foreach_with_mask(thd, thd, show_plugins, MYSQL_ANY_PLUGIN,
                                   ~PLUGIN_IS_FREED, tables->table);
 }
 

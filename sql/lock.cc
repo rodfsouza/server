@@ -1092,7 +1092,7 @@ void Global_read_lock::unlock_global_read_lock(THD *thd)
     thd->global_disable_checkpoint= 0;
     if (!--global_disable_checkpoint)
     {
-      ha_checkpoint_state(0);                   // Enable checkpoints
+      ha_checkpoint_state(thd, 0);                   // Enable checkpoints
     }
   }
 

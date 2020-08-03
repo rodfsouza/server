@@ -4955,14 +4955,14 @@ int ha_end(void);
 int ha_initialize_handlerton(st_plugin_int *plugin);
 int ha_finalize_handlerton(st_plugin_int *plugin);
 
-TYPELIB *ha_known_exts(void);
+TYPELIB *ha_known_exts(THD *ctl_thd);
 int ha_panic(enum ha_panic_function flag);
 void ha_close_connection(THD* thd);
 void ha_kill_query(THD* thd, enum thd_kill_levels level);
 bool ha_flush_logs(handlerton *db_type);
-void ha_drop_database(char* path);
-void ha_checkpoint_state(bool disable);
-void ha_commit_checkpoint_request(void *cookie, void (*pre_hook)(void *));
+void ha_drop_database(THD *ctl_thd, char* path);
+void ha_checkpoint_state(THD *ctl_thd, bool disable);
+void ha_commit_checkpoint_request(THD *ctl_thd, void *cookie, void (*pre_hook)(void *));
 int ha_create_table(THD *thd, const char *path,
                     const char *db, const char *table_name,
                     HA_CREATE_INFO *create_info, LEX_CUSTRING *frm);
@@ -5020,12 +5020,12 @@ int ha_change_key_cache(KEY_CACHE *old_key_cache, KEY_CACHE *new_key_cache);
 
 /* transactions: interface to handlerton functions */
 int ha_start_consistent_snapshot(THD *thd);
-int ha_commit_or_rollback_by_xid(XID *xid, bool commit);
+int ha_commit_or_rollback_by_xid(THD *ctl_thd, XID *xid, bool commit);
 int ha_commit_one_phase(THD *thd, bool all);
 int ha_commit_trans(THD *thd, bool all);
 int ha_rollback_trans(THD *thd, bool all);
 int ha_prepare(THD *thd);
-int ha_recover(HASH *commit_list);
+int ha_recover(THD *ctl_thd, HASH *commit_list);
 
 /* transactions: these functions never call handlerton functions directly */
 int ha_enable_transaction(THD *thd, bool on);

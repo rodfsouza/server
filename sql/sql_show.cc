@@ -311,7 +311,7 @@ int fill_plugins(THD *thd, TABLE_LIST *tables, COND *cond)
   DBUG_ENTER("fill_plugins");
   TABLE *table= tables->table;
 
-  if (plugin_foreach_with_mask(thd, show_plugins, MYSQL_ANY_PLUGIN,
+  if (plugin_foreach_with_mask(thd, thd, show_plugins, MYSQL_ANY_PLUGIN,
                                ~(PLUGIN_IS_FREED | PLUGIN_IS_DYING), table))
     DBUG_RETURN(1);
 
@@ -4433,7 +4433,7 @@ int schema_tables_add(THD *thd, Dynamic_array<LEX_CSTRING*> *files,
 
   add_data.files= files;
   add_data.wild= wild;
-  if (plugin_foreach(thd, add_schema_table,
+  if (plugin_foreach(thd, thd, add_schema_table,
                      MYSQL_INFORMATION_SCHEMA_PLUGIN, &add_data))
       DBUG_RETURN(1);
 
@@ -6200,7 +6200,7 @@ static my_bool iter_schema_engines(THD *thd, plugin_ref plugin,
 int fill_schema_engines(THD *thd, TABLE_LIST *tables, COND *cond)
 {
   DBUG_ENTER("fill_schema_engines");
-  if (plugin_foreach_with_mask(thd, iter_schema_engines,
+  if (plugin_foreach_with_mask(thd, thd, iter_schema_engines,
                                MYSQL_STORAGE_ENGINE_PLUGIN,
                                ~(PLUGIN_IS_FREED | PLUGIN_IS_DYING),
                                tables->table))
@@ -8124,7 +8124,7 @@ ST_SCHEMA_TABLE *find_schema_table(THD *thd, const LEX_CSTRING *table_name,
 
   *in_plugin= true;
   schema_table_a.table_name= table_name->str;
-  if (plugin_foreach(thd, find_schema_table_in_plugin,
+  if (plugin_foreach(thd, thd, find_schema_table_in_plugin,
                      MYSQL_INFORMATION_SCHEMA_PLUGIN, &schema_table_a))
     DBUG_RETURN(schema_table_a.schema_table);
 
@@ -8994,7 +8994,7 @@ int hton_fill_schema_table(THD *thd, TABLE_LIST *tables, COND *cond)
   args.tables= tables;
   args.cond= cond;
 
-  plugin_foreach(thd, run_hton_fill_schema_table,
+  plugin_foreach(thd, thd, run_hton_fill_schema_table,
                  MYSQL_STORAGE_ENGINE_PLUGIN, &args);
 
   DBUG_RETURN(0);

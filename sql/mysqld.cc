@@ -5311,7 +5311,7 @@ static int init_server_components()
   {
     /* fall back to the log files if tables are not present */
     LEX_CSTRING csv_name={STRING_WITH_LEN("csv")};
-    if (!plugin_is_ready(&csv_name, MYSQL_STORAGE_ENGINE_PLUGIN))
+    if (!plugin_is_ready(0, &csv_name, MYSQL_STORAGE_ENGINE_PLUGIN))
     {
       /* purecov: begin inspected */
       sql_print_error("CSV engine is not present, falling back to the "
@@ -5380,7 +5380,7 @@ static int init_server_components()
     unireg_abort(1);
   }
 
-  if (ha_recover(0))
+  if (ha_recover(0, 0))
   {
     unireg_abort(1);
   }

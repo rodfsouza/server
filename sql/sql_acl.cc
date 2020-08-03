@@ -106,7 +106,7 @@ static plugin_ref get_auth_plugin(THD *thd, const LEX_CSTRING &name, bool *locke
   else if (name.str == old_password_plugin_name.str)
     return old_password_plugin;
   *locked=true;
-  return my_plugin_lock_by_name(thd, &name, MYSQL_AUTHENTICATION_PLUGIN);
+  return my_plugin_lock_by_name(thd, thd, &name, MYSQL_AUTHENTICATION_PLUGIN);
 }
 
 /* Classes */
@@ -2030,7 +2030,7 @@ static my_bool check_if_exists(THD *, plugin_ref, void *)
 
 static bool has_validation_plugins()
 {
-  return plugin_foreach(NULL, check_if_exists,
+  return plugin_foreach(NULL, NULL, check_if_exists,
                         MariaDB_PASSWORD_VALIDATION_PLUGIN, NULL);
 }
 
@@ -2052,7 +2052,7 @@ static bool validate_password(THD *thd, const LEX_CSTRING &user,
   {
     struct validation_data data= { &user,
                                    pwtext.str ? &pwtext : &empty_clex_str };
-    if (plugin_foreach(NULL, do_validate,
+    if (plugin_foreach(thd, NULL, do_validate,
                        MariaDB_PASSWORD_VALIDATION_PLUGIN, &data))
     {
       my_error(ER_NOT_VALID_PASSWORD, MYF(0));
@@ -2264,9 +2264,9 @@ bool acl_init(bool dont_read_acl_tables)
     cache built-in native authentication plugins,
     to avoid hash searches and a global mutex lock on every connect
   */
-  native_password_plugin= my_plugin_lock_by_name(0,
+  native_password_plugin= my_plugin_lock_by_name(0, 0,
            &native_password_plugin_name, MYSQL_AUTHENTICATION_PLUGIN);
-  old_password_plugin= my_plugin_lock_by_name(0,
+  old_password_plugin= my_plugin_lock_by_name(0, 0,
            &old_password_plugin_name, MYSQL_AUTHENTICATION_PLUGIN);
 
   if (!native_password_plugin || !old_password_plugin)
@@ -4439,7 +4439,7 @@ static int replace_user_table(THD *thd, const User_table &user_table,
     nauth++;
     if (auth->plugin.length)
     {
-      if (!plugin_is_ready(&auth->plugin, MYSQL_AUTHENTICATION_PLUGIN))
+      if (!plugin_is_ready(thd, &auth->plugin, MYSQL_AUTHENTICATION_PLUGIN))
       {
         my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0), auth->plugin.str);
         goto end;

@@ -6274,5 +6274,20 @@ t1col1	t1col2	t1col3
 drop view v1;
 drop table t1,t2;
 #
+# MDEV-23291: SUM column from a derived table returns invalid values
+#
+CREATE TABLE t1(a INT, b INT);
+INSERT INTO t1 VALUES (1,1), (2,2);
+CREATE view v1 AS
+SELECT a as x, (select x) as y, (select y) as z FROM t1;
+SELECT sum(z) FROM (SELECT a as x, (select x) as y, (select y) as z FROM t1) q;
+sum(z)
+3
+SELECT sum(z) FROM v1;
+sum(z)
+3
+DROP TABLE t1;
+DROP VIEW v1;
+#
 # End of 10.1 tests
 #

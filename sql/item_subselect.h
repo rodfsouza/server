@@ -231,6 +231,7 @@ public:
     @retval FALSE otherwise
   */
   bool is_expensive_processor(uchar *arg) { return is_expensive(); }
+  bool update_table_bitmaps_processor(uchar *arg);
 
   /**
     Get the SELECT_LEX structure associated with this Item.

@@ -833,6 +833,18 @@ a1	a2	b
 0	NULL	1
 DROP TABLE t1, t2;
 #
+# MDEV-20618 Assertion `btr_validate_index(index, 0, false)' failed 
+# in row_upd_sec_index_entry
+#
+CREATE TABLE T1 (A BIT(15), VA BIT(10) GENERATED ALWAYS AS (A),PK INT,
+PRIMARY KEY (PK), UNIQUE KEY (VA));
+INSERT IGNORE INTO T1 VALUES ( '\r1','a',1);
+Warnings:
+Warning	1906	The value specified for generated column 'VA' in table 'T1' has been ignored
+Warning	1264	Out of range value for column 'VA' at row 1
+REPLACE INTO T1 (PK) VALUES (1);
+ERROR 22001: Data too long for column 'VA' at row 1
+#
 DROP VIEW  IF EXISTS v1,v2;
 DROP TABLE IF EXISTS t1,t2,t3;
 DROP PROCEDURE IF EXISTS p1;

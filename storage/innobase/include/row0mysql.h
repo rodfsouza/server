@@ -898,6 +898,14 @@ public:
 	}
 };
 
+inline void innobase_report_computed_value_failed(dtuple_t *row)
+{
+	ib::error() << "Compute virtual column values failed ";
+	fputs("InnoDB: Cannot compute value for following record ",
+	      stderr);
+	dtuple_print(stderr, row);
+}
+
 /** Get the computed value by supplying the base column values.
 @param[in,out]	row		the data row
 @param[in]	col		virtual column

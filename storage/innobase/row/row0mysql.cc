@@ -4524,6 +4524,12 @@ end:
 			innobase_rename_vc_templ(table);
 		}
 
+		/* Avoid renaming of foreign key constraints
+		if foreign_key_check is disabled */
+		if (!trx->check_foreigns) {
+			goto funct_exit;
+		}
+
 		/* We only want to switch off some of the type checking in
 		an ALTER TABLE...ALGORITHM=COPY, not in a RENAME. */
 		dict_names_t	fk_tables;

@@ -748,3 +748,17 @@ ANALYZE TABLE t1, t2;
 DROP TABLE t1, t2;
 
 --echo #
+--echo # MDEV-20618 Assertion `btr_validate_index(index, 0, false)' failed 
+--echo # in row_upd_sec_index_entry
+--echo #
+if($support_virtual_index)
+{
+CREATE TABLE T1 (A BIT(15), VA BIT(10) GENERATED ALWAYS AS (A),PK INT,
+                 PRIMARY KEY (PK), UNIQUE KEY (VA));
+ 
+INSERT IGNORE INTO T1 VALUES ( '\r1','a',1);
+--error ER_DATA_TOO_LONG
+REPLACE INTO T1 (PK) VALUES (1);
+}
+
+--echo #

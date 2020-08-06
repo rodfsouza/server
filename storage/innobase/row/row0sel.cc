@@ -242,6 +242,11 @@ row_sel_sec_rec_is_for_clust_rec(
 					thr->prebuilt->m_mysql_table,
 					record, NULL, NULL, NULL);
 
+			if (vfield == NULL) {
+				innobase_report_computed_value_failed(row);
+				ut_a(0);
+				return FALSE;
+			}
 			clust_len = vfield->len;
 			clust_field = static_cast<byte*>(vfield->data);
 		} else {

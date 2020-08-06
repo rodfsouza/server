@@ -513,7 +513,7 @@ row_merge_buf_add(
 	ulint			bucket = 0;
 	doc_id_t		write_doc_id;
 	ulint			n_row_added = 0;
-	VCOL_STORAGE		vcol_storage = {};
+	VCOL_STORAGE		vcol_storage = { NULL, NULL, NULL, NULL };
 	DBUG_ENTER("row_merge_buf_add");
 
 	if (buf->n_tuples >= buf->max_tuples) {
